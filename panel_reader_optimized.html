@@ -1,0 +1,967 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#E4E7E3">
+<title>Panel reader</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Barlow:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#16232E; --muted:#56636F; --bg:#E4E7E3; --card:#F6F7F5; --line:#BEC5C2;
+  --accent:#2E34A3; --ok:#1B7F4B; --warn:#A8650A; --bad:#B3261E; --skip:#8B939B;
+  --head:'Barlow Semi Condensed','Arial Narrow',system-ui,sans-serif;
+  --body:'Barlow',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.4;-webkit-text-size-adjust:100%}
+body{padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+.wrap{max-width:520px;margin:0 auto;padding:10px 14px 40px}
+button,input,textarea{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+
+header.top{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0 8px}
+header.top h1{font:700 1.25rem/1 var(--head);margin:0;letter-spacing:.01em}
+.hbtns{display:flex;gap:4px}
+.link{background:none;border:0;padding:10px 8px;font:600 1rem var(--head);color:var(--accent);cursor:pointer}
+
+#bus{display:flex;gap:3px;align-items:flex-end;height:30px;margin:2px 0 4px}
+.tick{flex:1;height:14px;border-radius:3px;border:2px solid var(--line);background:transparent}
+.tick.ok{background:var(--ok);border-color:var(--ok)}
+.tick.edited{background:var(--ok);border-color:var(--ok);box-shadow:inset 0 5px 0 #E0A33A}
+.tick.check{background:var(--warn);border-color:var(--warn)}
+.tick.skip{background:repeating-linear-gradient(135deg,var(--skip) 0 3px,transparent 3px 6px);border-color:var(--skip)}
+.tick.current{height:28px;border-color:var(--accent);background:var(--accent)}
+#busLabel{font-size:.85rem;color:var(--muted);display:flex;justify-content:space-between;gap:8px;margin-bottom:10px}
+#chip.err{color:var(--bad)}
+
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px}
+.pname{font:700 2rem/1.05 var(--head);letter-spacing:.005em;margin:2px 0 2px;overflow-wrap:anywhere}
+.pmeta{color:var(--muted);font-size:.95rem}
+.shot{font:600 1.1rem var(--head);margin:14px 0 2px}
+.hint{color:var(--muted);margin:0 0 10px;font-size:.95rem}
+
+.stage{position:relative;aspect-ratio:var(--ar,.75);width:min(100%,calc(58vh * var(--ar,.75)));margin:0 auto;background:#000;overflow:hidden;border-radius:12px}
+.stage video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.guide{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);border:4px solid var(--bad);border-radius:6px;box-shadow:0 0 0 999px rgba(0,0,0,.5);pointer-events:none;transition:border-color .15s ease}
+.guide[data-state="ready"]{border-color:#20D16B}
+.guide[data-state="wait"]{border-color:#F3C342}
+.guide[data-state="bad"]{border-color:#F04444}
+.guide::after{content:attr(data-label);position:absolute;left:0;right:0;top:-28px;text-align:center;color:#fff;font:700 .9rem var(--head);text-shadow:0 1px 3px #000;white-space:nowrap}
+.cam-status{padding:9px 11px;border-radius:8px;margin:0 0 10px;background:#F8ECD6;color:#6F4B08;font-weight:600;font-size:.9rem}
+.cam-status.ready{background:#E3F1E8;color:#145D36}
+.cam-status.bad{background:#F6DEDB;color:#8C201A}
+.camerr{padding:12px;border:1px dashed var(--bad);border-radius:10px;color:var(--bad);margin-bottom:10px}
+.zoom{display:flex;gap:8px;align-items:center;margin:8px 0 0;font-size:.9rem;color:var(--muted)}
+.zoom input{flex:1}
+
+.actions{display:grid;gap:8px;margin-top:12px}
+.btn{min-height:54px;border-radius:10px;border:1.5px solid var(--ink);background:#fff;font:700 1.1rem var(--head);cursor:pointer;display:flex;align-items:center;justify-content:center;text-align:center;padding:0 14px}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.warn{background:var(--warn);border-color:var(--warn);color:#fff}
+.btn.quiet{border-color:var(--line);font-weight:600}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+label.btn input{display:none}
+
+.banner{border-radius:10px;padding:10px 12px;margin:0 0 12px;border-left:6px solid}
+.banner.ok{background:#E3F1E8;border-color:var(--ok)}
+.banner.warn{background:#F8ECD6;border-color:var(--warn)}
+.banner.bad{background:#F6DEDB;border-color:var(--bad)}
+.banner b{font-family:var(--head);font-size:1.05rem}
+.banner ul{margin:4px 0 0;padding-left:18px}
+
+.row{display:grid;grid-template-columns:62px 1fr 128px;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.row:first-of-type{border-top:0}
+.row .lab{font:700 1.15rem var(--head)}
+.row .lab small{display:block;font:400 .78rem var(--body);color:var(--muted)}
+.row img.crop{max-width:100%;height:46px;object-fit:contain;object-position:left;background:#fff;border:1px solid var(--line);border-radius:6px}
+.row .noimg{height:46px;border:1px dashed var(--line);border-radius:6px;display:flex;align-items:center;padding-left:8px;color:var(--muted);font-size:.85rem}
+.inwrap{display:flex;gap:4px}
+.inwrap input{width:100%;min-width:0;height:46px;border:1.5px solid var(--ink);border-radius:8px;padding:0 8px;font:700 1.3rem var(--head);font-variant-numeric:tabular-nums;background:#fff}
+.inwrap input.low{border-color:var(--warn);background:#FFF7E8}
+.pm{width:42px;flex:none;border:1.5px solid var(--ink);background:#fff;border-radius:8px;font:700 1.1rem var(--head);cursor:pointer}
+details{margin-top:12px}
+summary{cursor:pointer;color:var(--muted);padding:6px 0}
+details img{width:100%;border-radius:8px;margin-top:6px;border:1px solid var(--line)}
+
+.big{font:700 1.6rem/1.1 var(--head);margin:4px 0 8px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:10px 0}
+.stats div{background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px 4px;text-align:center}
+.stats b{display:block;font:700 1.5rem var(--head)}
+.stats span{font-size:.78rem;color:var(--muted)}
+input.txt,textarea.txt{width:100%;border:1.5px solid var(--ink);border-radius:8px;padding:10px;background:#fff}
+textarea.txt{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.9rem;min-height:300px}
+.field{margin:10px 0}
+.field>span{display:block;font:600 .95rem var(--head);margin-bottom:4px}
+.note{color:var(--muted);font-size:.88rem}
+
+dialog{border:0;border-radius:14px;padding:0;width:min(560px,96vw);max-height:92vh;background:var(--card);color:var(--ink)}
+dialog::backdrop{background:rgba(10,20,30,.55)}
+dialog .in{padding:16px;overflow:auto;max-height:90vh}
+dialog h2{font:700 1.4rem var(--head);margin:0 0 8px}
+.tbl{overflow-x:auto;margin:8px 0}
+table{border-collapse:collapse;width:100%;font-size:.88rem;font-variant-numeric:tabular-nums}
+th,td{padding:5px 6px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+th:first-child,td:first-child,th:nth-child(2),td:nth-child(2){text-align:left}
+th{font-family:var(--head)}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:999px;font-weight:500;z-index:50}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>Panel reader</h1>
+    <div class="hbtns">
+      <button class="link" id="btnRecords">Records</button>
+      <button class="link" id="btnSettings">Settings</button>
+    </div>
+  </header>
+  <div id="bus" aria-hidden="true"></div>
+  <div id="busLabel"><span id="roundLabel"></span><span id="chip">Text reader: loading</span></div>
+  <main id="app"></main>
+</div>
+
+<dialog id="dlgRecords"><div class="in" id="recordsBody"></div></dialog>
+<dialog id="dlgSettings"><div class="in" id="settingsBody"></div></dialog>
+
+<noscript>This page needs JavaScript.</noscript>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+<script>
+(() => {
+'use strict';
+
+/* =====================================================================
+   CONFIG: edit here
+   Boxes are [left, top, right, bottom] as fractions of the LCD area
+   (0 = left/top edge of the screen, 1 = right/bottom edge).
+   ===================================================================== */
+const GUIDE_W = 0.9;            // guide frame width as a share of the camera frame
+const FIELDS = ['A','kW','kVAr','kVA','PF'];
+const META = {
+  A:   {label:'Current', unit:'A',    signed:false},
+  kW:  {label:'kW',      unit:'kW',   signed:true},
+  kVAr:{label:'kVAr',    unit:'kvar', signed:true},
+  kVA: {label:'kVA',     unit:'kVA',  signed:false},
+  PF:  {label:'P.F.',    unit:'',     signed:true}
+};
+
+const BRANDS = {
+  comap: {
+    label:'ComAp', aspect:1.68,
+    shots:{
+      cur:{ title:'Generator screen',
+            hint:'The page titled "Generator" (voltages top, Gen I amps bottom left).',
+            fields:[{k:'A', box:[.39,.57,.52,.69], chars:'0123456789', kind:'int'}] },
+      pwr:{ title:'Power screen',
+            hint:'The page titled "Power" (GENSET kW, power factor, kVAr, kVA).',
+            fields:[
+              {k:'kW',   box:[.77,.225,.875,.325], chars:'0123456789-', kind:'int'},
+              {k:'PF',   box:[.775,.405,.875,.49], chars:'0123456789.', kind:'pf'},
+              {k:'kVAr', box:[.77,.56,.875,.65],   chars:'0123456789-', kind:'int'},
+              {k:'kVA',  box:[.77,.725,.875,.815], chars:'0123456789',  kind:'int'}
+            ] }
+    }
+  },
+  schneider: {
+    label:'Schneider', aspect:1.85,
+    shots:{
+      cur:{ title:'Main screen',
+            hint:'The first screen with the panel name and the single-line diagram.',
+            fields:[{k:'A', box:[.55,.265,.995,.41], chars:'0123456789A', kind:'int'}] },
+      pwr:{ title:'Power screen',
+            hint:'The page titled "POWER" (P, Q, S, P.F.).',
+            fields:[
+              {k:'kW',   box:[.50,.18,.99,.29],  chars:'0123456789-kWvarVA', kind:'int'},
+              {k:'kVAr', box:[.50,.295,.99,.40], chars:'0123456789-kWvarVA', kind:'int'},
+              {k:'kVA',  box:[.50,.405,.99,.51], chars:'0123456789-kWvarVA', kind:'int'},
+              {k:'PF',   box:[.55,.59,.95,.735], chars:'0123456789-.',       kind:'pf'}
+            ] }
+    }
+  }
+};
+
+const DEFAULT_PANELS = `G6, comap
+G4, comap
+G1, comap
+G5, comap
+G3, comap
+G2, comap
+EKO ACADEMY, schneider
+INCOMER, schneider
+WATER TREATMENT PLANT, schneider
+EMBASSY, schneider
+ITB BATCH PLANT, schneider
+BUS SECTION, schneider
+SSIII OUTGOING, schneider
+INTER-CONNECT, schneider
+SSII OUTGOING, schneider
+ORCA MALL, schneider
+FEEDER LOOP, schneider`;
+
+/* ===================================================================== */
+const K = {panels:'pr.panels', records:'pr.records', round:'pr.round', settings:'pr.settings'};
+const $ = (s, el=document) => el.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const store = {
+  get(k, d){ try{ const v = localStorage.getItem(k); return v==null ? d : JSON.parse(v); }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); return true; }catch(e){ return false; } }
+};
+const pad2 = n => String(n).padStart(2,'0');
+const stamp = (d=new Date()) => `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+const hourLabel = (d=new Date()) => `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:00`;
+
+function parsePanels(text, defKv){
+  return text.split('\n').map(l => l.trim()).filter(Boolean).map(l => {
+    const p = l.split(',').map(x => x.trim());
+    const brand = /^s/i.test(p[1]||'') ? 'schneider' : 'comap';
+    const kv = parseFloat(p[2]);
+    return {name:p[0].toUpperCase(), brand, kv: isFinite(kv) && kv>0 ? kv : defKv};
+  });
+}
+
+const S = {
+  settings: Object.assign({operator:'', tol:3, kv:33}, store.get(K.settings, {})),
+  panelText: store.get(K.panels, DEFAULT_PANELS),
+  records: store.get(K.records, []),
+  round: store.get(K.round, null),
+  view: 'start',
+  cur: null
+};
+S.panels = parsePanels(S.panelText, S.settings.kv);
+const persist = () => {
+  const a=store.set(K.records,S.records), b=store.set(K.round,S.round);
+  if(!a || !b) toast('Browser storage is full or unavailable. Export records now.');
+};
+
+function toast(msg){
+  const t = document.createElement('div'); t.className='toast'; t.textContent=msg; document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2200);
+}
+
+/* ---------------- OCR engine ---------------- */
+let engine = 'loading';
+const chip = $('#chip');
+function setChip(){
+  chip.className = engine==='error' ? 'err' : '';
+  chip.textContent = engine==='ready' ? 'Text reader: ready' : engine==='error' ? 'Text reader offline: type values by hand' : 'Text reader: loading';
+}
+let workerP = null;
+function initEngine(){
+  if(typeof Tesseract === 'undefined'){ engine='error'; setChip(); return; }
+  workerP = Tesseract.createWorker('eng', 1, {langPath:'https://cdn.jsdelivr.net/npm/@tesseract.js-data/eng/4.0.0_best_int'})
+    .then(async w => { await w.setParameters({user_defined_dpi:'300'}); engine='ready'; setChip(); return w; })
+    .catch(() => { engine='error'; setChip(); return null; });
+}
+let q = Promise.resolve();
+const queueOcr = fn => { const p = q.then(fn); q = p.catch(() => {}); return p; };
+
+async function ocr(canvas, chars){
+  const w = await workerP;
+  if(!w) return {text:'', conf:0};
+  await w.setParameters({tessedit_char_whitelist:chars, tessedit_pageseg_mode:Tesseract.PSM.SINGLE_LINE});
+  const {data} = await w.recognize(canvas);
+  return {text:data.text||'', conf:data.confidence||0};
+}
+
+function otsu(hist, total){
+  let sum=0; for(let i=0;i<256;i++) sum+=i*hist[i];
+  let sumB=0,wB=0,max=0,thr=128;
+  for(let t=0;t<256;t++){
+    wB+=hist[t]; if(!wB) continue;
+    const wF=total-wB; if(!wF) break;
+    sumB+=t*hist[t];
+    const mB=sumB/wB, mF=(sum-sumB)/wF, between=wB*wF*(mB-mF)*(mB-mF);
+    if(between>max){ max=between; thr=t; }
+  }
+  return thr;
+}
+function boxPx(lcd, box){
+  const W=lcd.width, H=lcd.height;
+  const x=Math.max(0,Math.round(box[0]*W)), y=Math.max(0,Math.round(box[1]*H));
+  const w=Math.max(4,Math.min(W-x,Math.round((box[2]-box[0])*W))), h=Math.max(4,Math.min(H-y,Math.round((box[3]-box[1])*H)));
+  return {x,y,w,h};
+}
+function makeOcrImage(lcd, box, soft){
+  const {x,y,w,h} = boxPx(lcd, box);
+  const scale = Math.min(4, Math.max(1, 110/h));
+  const pad = 16, iw = Math.round(w*scale), ih = Math.round(h*scale);
+  const c = document.createElement('canvas'); c.width = iw+pad*2; c.height = ih+pad*2;
+  const g = c.getContext('2d', {willReadFrequently:true});
+  g.fillStyle='#fff'; g.fillRect(0,0,c.width,c.height);
+  if(soft) g.filter = `blur(${Math.max(1, scale*0.8).toFixed(1)}px)`;
+  g.drawImage(lcd, x,y,w,h, pad,pad,iw,ih);
+  g.filter = 'none';
+  const img = g.getImageData(0,0,c.width,c.height), d = img.data;
+  const gray = new Uint8Array(c.width*c.height), hist = new Array(256).fill(0);
+  let total=0;
+  for(let py=0; py<c.height; py++) for(let px=0; px<c.width; px++){
+    const i = py*c.width+px, o = i*4;
+    const v = (0.299*d[o]+0.587*d[o+1]+0.114*d[o+2])|0; gray[i]=v;
+    if(px>=pad && px<c.width-pad && py>=pad && py<c.height-pad){ hist[v]++; total++; }
+  }
+  const thr = otsu(hist, total);
+  let dark=0;
+  for(let py=pad; py<c.height-pad; py++) for(let px=pad; px<c.width-pad; px++) if(gray[py*c.width+px] <= thr) dark++;
+  const invert = dark > total*0.5;
+  for(let i=0;i<gray.length;i++){
+    let isText = gray[i] <= thr; if(invert) isText = !isText;
+    const v = isText ? 0 : 255, o = i*4;
+    d[o]=d[o+1]=d[o+2]=v; d[o+3]=255;
+  }
+  g.putImageData(img,0,0);
+  return c;
+}
+function rawCrop(lcd, box){
+  const {x,y,w,h} = boxPx(lcd, box);
+  const s = 64/h, c = document.createElement('canvas');
+  c.width = Math.round(w*s); c.height = 64;
+  c.getContext('2d').drawImage(lcd, x,y,w,h, 0,0,c.width,c.height);
+  return c.toDataURL('image/jpeg', .85);
+}
+function overlayURL(lcd, fields){
+  const s = 720/lcd.width, c = document.createElement('canvas');
+  c.width = 720; c.height = Math.round(lcd.height*s);
+  const g = c.getContext('2d'); g.drawImage(lcd,0,0,c.width,c.height);
+  g.lineWidth = 3; g.strokeStyle = '#E0261B'; g.fillStyle = '#E0261B'; g.font = '600 18px sans-serif';
+  fields.forEach(f => {
+    const b = f.box, x=b[0]*c.width, y=b[1]*c.height, w=(b[2]-b[0])*c.width, h=(b[3]-b[1])*c.height;
+    g.strokeRect(x,y,w,h); g.fillText(f.k, x+2, Math.max(16,y-4));
+  });
+  return c.toDataURL('image/jpeg', .8);
+}
+
+function parseValue(text, f){
+  const t = text.replace(/[\u2010-\u2015\u2212]/g,'-').replace(/,/g,'.').replace(/\s+/g,'');
+  const m = t.match(/(\d+(?:\.\d+)?)/);
+  if(!m) return null;
+  const before = t.slice(0, m.index);
+  const neg = /-/.test(before) ? -1 : 1;
+  if(f.kind === 'pf'){
+    let v;
+    if(m[1].includes('.')) v = parseFloat(m[1]);
+    else {
+      const dgt = m[1];
+      if(dgt.length === 1) v = parseInt(dgt,10);
+      else if(dgt.length <= 3) v = parseInt(dgt,10)/100;
+      else return null;
+    }
+    return isFinite(v) ? neg*v : null;
+  }
+  const digits = m[1].replace(/\./g,'');
+  const v = parseInt(digits,10);
+  return isFinite(v) ? neg*v : null;
+}
+
+async function ocrShot(brandKey, shotId, lcd){
+  const shot = BRANDS[brandKey].shots[shotId], out = {};
+  const order = brandKey==='schneider' ? [true,false] : [false,true];
+  for(const f of shot.fields){
+    let best = null;
+    try{
+      for(const soft of order){
+        const r = await ocr(makeOcrImage(lcd, f.box, soft), f.chars);
+        const v = parseValue(r.text, f);
+        if(v!=null && (!best || r.conf > best.conf)) best = {value:v, raw:r.text.trim(), conf:r.conf};
+        if(best && best.conf >= 70) break;
+      }
+    }catch(e){ /* leave as null */ }
+    out[f.k] = best || {value:null, raw:'', conf:0};
+    out[f.k].crop = rawCrop(lcd, f.box);
+  }
+  return out;
+}
+
+/* ---------------- camera ---------------- */
+const video = document.createElement('video');
+video.setAttribute('playsinline',''); video.muted = true; video.autoplay = true;
+let stream = null, camError = '';
+async function startCam(){
+  if(stream) return true;
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ camError='Camera not available on this page. Use the gallery option, and open the app from its https address.'; return false; }
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}, width:{ideal:1920}, height:{ideal:1080}}, audio:false});
+    video.srcObject = stream; await video.play(); camError=''; return true;
+  }catch(e){ camError = 'Could not open the camera ('+(e.name||'error')+'). Allow camera access for this site, or use the gallery option.'; return false; }
+}
+function stopCam(){ stopLiveGuide(); if(stream){ stream.getTracks().forEach(t => t.stop()); stream=null; video.srcObject=null; } }
+video.addEventListener('loadedmetadata', layoutGuide);
+video.addEventListener('resize', layoutGuide);
+function layoutGuide(){
+  const st = $('.stage'), g = $('.guide');
+  if(!st || !g || !video.videoWidth || !S.cur) return;
+  const vw = video.videoWidth, vh = video.videoHeight, ar = BRANDS[S.cur.panel.brand].aspect;
+  st.style.setProperty('--ar', (vw/vh).toFixed(4));
+  let gw = GUIDE_W, gh = (GUIDE_W*vw/ar)/vh;
+  if(gh > 0.92){ gw = gw*0.92/gh; gh = 0.92; }
+  g.style.width = (gw*100)+'%'; g.style.height = (gh*100)+'%';
+}
+function grabFromVideo(aspect){
+  const vw = video.videoWidth, vh = video.videoHeight;
+  let gw = vw*GUIDE_W, gh = gw/aspect;
+  if(gh > vh*0.92){ gh = vh*0.92; gw = gh*aspect; }
+  const gx = (vw-gw)/2, gy = (vh-gh)/2;
+  const c = document.createElement('canvas'); c.width = Math.round(gw); c.height = Math.round(gh);
+  c.getContext('2d').drawImage(video, gx,gy,gw,gh, 0,0,c.width,c.height);
+  return c;
+}
+async function fromFile(file){
+  const bmp = await createImageBitmap(file);
+  const s = Math.min(1, 1800/Math.max(bmp.width,bmp.height));
+  const c = document.createElement('canvas'); c.width = Math.round(bmp.width*s); c.height = Math.round(bmp.height*s);
+  c.getContext('2d').drawImage(bmp,0,0,c.width,c.height);
+  if(bmp.close) bmp.close();
+  return c;
+}
+
+/* ---------------- screen identity and live readiness ----------------
+   A green guide requires both a readable expected header and a steady,
+   sufficiently sharp image. OCR is rechecked on the actual captured frame
+   before it is accepted, so a stale green state cannot silently advance. */
+let guideTimer = 0, guideCanvas = null, guideCtx = null;
+let guideRun = null, candidateBusy = false;
+function stopLiveGuide(){
+  if(guideTimer){ clearInterval(guideTimer); guideTimer=0; }
+  guideRun = null;
+}
+function shotLabel(brand, shotId){
+  if(brand==='comap') return shotId==='cur' ? 'GENERATOR' : 'POWER';
+  return shotId==='cur' ? 'MAIN SCREEN' : 'POWER';
+}
+function headerBox(brand){
+  return brand==='comap' ? [.025,.0,.78,.15] : [.015,.0,.99,.25];
+}
+async function detectScreen(brand, shotId, lcd){
+  if(!workerP || engine!=='ready') return {kind:'unknown', text:'', message:'Text reader is not ready'};
+  const box = headerBox(brand);
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789[]/.- ';
+  let text = '';
+  try{
+    const r = await ocr(makeOcrImage(lcd, box, false), chars);
+    text = (r.text||'').trim();
+    if(!text || r.conf < 12){
+      const r2 = await ocr(makeOcrImage(lcd, box, true), chars);
+      if((r2.conf||0) > (r.conf||0)){ text = (r2.text||'').trim(); }
+    }
+  }catch(e){ return {kind:'unknown', text:'', message:'Could not read the screen title'}; }
+  const normalized = text.toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+  const hasGenerator = normalized.includes('generator');
+  const hasPower = /(^|\s)power(\s|$)/.test(normalized) || normalized.includes('p0wer');
+  if(brand==='comap'){
+    if(hasGenerator) return {kind:shotId==='cur'?'match':'mismatch', text, seen:'Generator', message:shotId==='cur'?'Generator screen recognized':'This is the Generator screen, not the Power screen'};
+    if(hasPower) return {kind:shotId==='pwr'?'match':'mismatch', text, seen:'Power', message:shotId==='pwr'?'Power screen recognized':'This is the Power screen, not the Generator screen'};
+    return {kind:'unknown', text, message:'Could not confidently read Generator or Power in the title'};
+  }
+  if(hasPower){
+    return {kind:shotId==='pwr'?'match':'mismatch', text, seen:'POWER', message:shotId==='pwr'?'Schneider POWER screen recognized':'This is the Schneider POWER screen, not the main screen'};
+  }
+  const words = normalized.match(/[a-z]{3,}/g) || [];
+  if(shotId==='cur' && words.length){
+    return {kind:'match', text, seen:words[0], message:'Schneider main screen title detected'};
+  }
+  if(shotId==='pwr' && words.length){
+    return {kind:'mismatch', text, seen:words[0], message:'A Schneider main screen title was detected; the POWER screen is expected'};
+  }
+  return {kind:'unknown', text, message:'Could not verify the Schneider screen title'};
+}
+function setGuideState(state, message){
+  const guide = $('.guide'), status = $('#camStatus');
+  if(!guide || !status) return;
+  guide.dataset.state = state;
+  guide.dataset.label = state==='ready' ? 'GREEN · READY' : state==='bad' ? 'RED · ADJUST' : 'YELLOW · HOLD STEADY';
+  status.className = 'cam-status' + (state==='ready' ? ' ready' : state==='bad' ? ' bad' : '');
+  status.textContent = message;
+}
+function frameQuality(){
+  if(!video.videoWidth || !video.videoHeight) return {state:'wait', message:'Starting camera…'};
+  if(!guideCanvas){ guideCanvas=document.createElement('canvas'); guideCanvas.width=96; guideCanvas.height=64; guideCtx=guideCanvas.getContext('2d',{willReadFrequently:true}); }
+  guideCtx.drawImage(video,0,0,guideCanvas.width,guideCanvas.height);
+  const data=guideCtx.getImageData(0,0,guideCanvas.width,guideCanvas.height).data;
+  const W=guideCanvas.width,H=guideCanvas.height,N=W*H, gray=new Uint8Array(N);
+  let sum=0, glare=0;
+  for(let i=0,p=0;i<data.length;i+=4,p++){
+    const v=(.299*data[i]+.587*data[i+1]+.114*data[i+2])|0;
+    gray[p]=v; sum+=v; if(v>250) glare++;
+  }
+  const mean=sum/N, glareRatio=glare/N;
+  let edge=0, lapSum=0, lapSq=0, count=0;
+  for(let y=1;y<H-1;y++) for(let x=1;x<W-1;x++){
+    const i=y*W+x, v=gray[i];
+    edge+=Math.abs(v-gray[i+1])+Math.abs(v-gray[i+W]);
+    const lap=4*v-gray[i-1]-gray[i+1]-gray[i-W]-gray[i+W];
+    lapSum+=lap; lapSq+=lap*lap; count++;
+  }
+  const sharp=(lapSq/count)-Math.pow(lapSum/count,2), edgeAvg=edge/(2*count);
+  let motion=0;
+  if(guideRun && guideRun.previousGray){
+    const prev=guideRun.previousGray;
+    for(let i=0;i<N;i++) motion+=Math.abs(gray[i]-prev[i]);
+    motion/=N;
+  }
+  if(guideRun) guideRun.previousGray=gray;
+  if(mean<22) return {state:'bad',message:'Too dark · move closer or improve the light',mean,glareRatio,sharp,motion};
+  if(glareRatio>.42) return {state:'bad',message:'Strong glare · tilt the phone slightly',mean,glareRatio,sharp,motion};
+  if(guideRun && guideRun.previousGray && motion>13) return {state:'wait',message:'Phone moving · hold it steady',mean,glareRatio,sharp,motion};
+  if(sharp<17 || edgeAvg<2.2) return {state:'wait',message:'Image is soft · hold steady and let it focus',mean,glareRatio,sharp,motion};
+  return {state:'quality',message:'Image looks clear · checking screen title',mean,glareRatio,sharp,motion};
+}
+async function guideTick(){
+  const run=guideRun;
+  if(!run || run.panel!==S.cur || S.view!=='capture' || candidateBusy || run.checking) return;
+  const q=frameQuality();
+  if(q.state==='bad'){ run.stableSince=0; setGuideState('bad',q.message); return; }
+  if(q.state==='wait'){ run.stableSince=0; setGuideState('wait',q.message); return; }
+  const now=Date.now();
+  if(now-run.lastHeaderCheck>1650 && !run.checking){
+    run.checking=true; run.lastHeaderCheck=now;
+    try{
+      const brand=run.panel.panel.brand, expectedShot=run.shot;
+      const lcd=grabFromVideo(BRANDS[brand].aspect);
+      const result=await queueOcr(()=>detectScreen(brand,expectedShot,lcd));
+      if(guideRun!==run || S.cur!==run.panel || S.cur.shot!==expectedShot || S.view!=='capture') return;
+      run.screenResult=result; run.lastScreenAt=Date.now();
+      if(result.kind==='mismatch'){
+        run.stableSince=0; setGuideState('bad',`${result.message}. Show the correct screen.`); return;
+      }
+      if(result.kind==='unknown'){
+        run.stableSince=0; setGuideState('wait','Screen title not clear · move closer or use Take photo to check manually'); return;
+      }
+    }catch(e){ run.screenResult={kind:'unknown'}; }
+    finally{ if(guideRun===run) run.checking=false; }
+  }
+  const recentMatch=run.screenResult && run.screenResult.kind==='match' && Date.now()-run.lastScreenAt<3600;
+  if(!recentMatch){ run.stableSince=0; setGuideState('wait','Image looks clear · waiting to verify the expected screen'); return; }
+  if(!run.stableSince) run.stableSince=Date.now();
+  setGuideState('ready',`Correct screen · keep steady (${Math.max(0,1.4-(Date.now()-run.stableSince)/1000).toFixed(1)}s to auto-capture)`);
+  if(Date.now()-run.stableSince>=1400 && !candidateBusy){
+    const lcd=grabFromVideo(BRANDS[run.panel.panel.brand].aspect);
+    validateCandidate(lcd,true,'camera');
+  }
+}
+function startLiveGuide(c){
+  stopLiveGuide();
+  guideRun={panel:c,shot:c.shot,previousGray:null,stableSince:0,lastHeaderCheck:0,lastScreenAt:0,screenResult:{kind:'unknown'},checking:false};
+  setGuideState('wait','Align the screen inside the frame');
+  guideTimer=setInterval(()=>{ guideTick().catch(()=>{}); },350);
+}
+async function validateCandidate(lcd, automatic, source){
+  if(candidateBusy) return false;
+  const c=S.cur;
+  if(!c || S.view!=='capture') return false;
+  const brand=c.panel.brand, shotId=c.shot;
+  candidateBusy=true;
+  const snap=$('#snap');
+  if(snap && !automatic){ snap.disabled=true; snap.textContent='Checking screen…'; }
+  try{
+    const result=await queueOcr(()=>detectScreen(brand,shotId,lcd));
+    if(S.cur!==c || c.shot!==shotId || S.view!=='capture') return false;
+    if(result.kind!=='match'){
+      if(automatic){
+        if(guideRun){ guideRun.screenResult=result; guideRun.lastScreenAt=Date.now(); guideRun.stableSince=0; }
+        setGuideState(result.kind==='mismatch'?'bad':'wait',result.message || 'Screen not verified; adjust and try again');
+        return false;
+      }
+      const detail=result.text ? `\nDetected title text: “${result.text}”.` : '';
+      const prompt=result.kind==='mismatch'
+        ? `The app thinks this is the wrong screen. ${result.message}.${detail}\n\nUse this photo anyway?`
+        : `The app could not verify that this is the expected ${shotLabel(brand,shotId)} screen.${detail}\n\nUse this photo anyway after checking it yourself?`;
+      if(!confirm(prompt)) return false;
+      toast('Photo accepted after manual screen check');
+    }
+    if(S.cur!==c || S.view!=='capture') return false;
+    handleShot(lcd);
+    return true;
+  }catch(e){
+    if(!automatic && confirm('Screen verification failed. Have you checked that this is the correct screen? Use this photo anyway?')){
+      if(S.cur===c && c.shot===shotId && S.view==='capture') handleShot(lcd);
+      return true;
+    }
+    if(automatic && guideRun){ guideRun.stableSince=0; setGuideState('wait','Could not verify screen · use Take photo to check manually'); }
+    return false;
+  }finally{
+    candidateBusy=false;
+    const currentSnap=$('#snap');
+    if(currentSnap && S.view==='capture'){ currentSnap.disabled=false; currentSnap.textContent='Take photo'; }
+  }
+}
+
+/* ---------------- round / panel flow ---------------- */
+function roundRecords(){ return S.round ? S.records.filter(r => r.roundId === S.round.id) : []; }
+function newCur(panel, idx){
+  return {panel, idx, shot:'cur', retake:null, lcd:{}, results:{cur:null,pwr:null}, pending:{}, vals:{}, ocr:{}, conf:{}, crop:{}, touched:{}};
+}
+function startRound(label){
+  S.round = {id:Date.now(), label, idx:0};
+  persist(); startPanel();
+}
+function startPanel(){
+  if(!S.round) return;
+  if(S.round.idx >= S.panels.length){ S.view='done'; stopCam(); render(); return; }
+  S.cur = newCur(S.panels[S.round.idx], S.round.idx);
+  S.view = 'capture'; render();
+}
+function mergeResults(c){
+  ['cur','pwr'].forEach(id => {
+    const r = c.results[id]; if(!r) return;
+    Object.keys(r).forEach(k => {
+      if(c.touched[k]) return;
+      c.vals[k] = r[k].value; c.ocr[k] = r[k].value; c.conf[k] = r[k].conf; c.crop[k] = r[k].crop;
+    });
+  });
+  if(c.panel.brand==='comap' && c.vals.PF!=null && !c.touched.PF){
+    c.vals.PF = (c.vals.kVAr!=null && c.vals.kVAr<0 ? -1 : 1) * Math.abs(c.vals.PF);
+  }
+}
+function handleShot(lcd){
+  const c = S.cur;
+  if(!c || S.view!=='capture') return;
+  const id = c.shot, brand = c.panel.brand, shot = BRANDS[brand].shots[id];
+  shot.fields.forEach(f => { delete c.touched[f.k]; c.vals[f.k]=null; c.ocr[f.k]=null; c.conf[f.k]=null; delete c.crop[f.k]; });
+  c.results[id] = null;
+  c.lcd[id] = overlayURL(lcd, shot.fields);
+  c.pending[id] = queueOcr(() => ocrShot(brand, id, lcd)).then(res => {
+    if(S.cur!==c) return;
+    c.results[id] = res; mergeResults(c); delete c.pending[id];
+    if(S.view==='review' && S.cur===c) renderReview();
+  }).catch(() => { delete c.pending[id]; if(S.view==='review' && S.cur===c) renderReview(); });
+  if(navigator.vibrate) navigator.vibrate(25);
+  if(c.retake){ c.retake = null; goReview(); }
+  else if(id==='cur'){ c.shot='pwr'; renderCapture(); }
+  else goReview();
+}
+function goReview(){ stopLiveGuide(); stopCam(); S.view='review'; render(); }
+
+/* ---------------- checks ---------------- */
+function runChecks(v, panel){
+  const out = [], tol = S.settings.tol/100, kv = panel.kv;
+  const miss = FIELDS.filter(k => v[k]==null || isNaN(v[k]));
+  if(miss.length) out.push({lvl:'bad', t:'Missing: '+miss.map(k => META[k].label).join(', ')+'. Type them in or retake the photo.'});
+  const {A,kW,kVAr,kVA,PF} = v;
+  if(kW!=null && kVAr!=null && kVA!=null){
+    const calc = Math.hypot(kW,kVAr);
+    if(Math.abs(calc-kVA) > Math.max(tol*Math.max(calc,kVA), 3))
+      out.push({lvl:'warn', t:`kW and kVAr work out to ${Math.round(calc)} kVA, but kVA says ${kVA}.`});
+  }
+  if(kW!=null && kVA!=null && PF!=null && kVA>0){
+    const pf = Math.abs(kW)/kVA;
+    if(Math.abs(Math.abs(PF)-pf) > 0.03) out.push({lvl:'warn', t:`kW divided by kVA gives ${pf.toFixed(2)}, but P.F. says ${Math.abs(PF).toFixed(2)}.`});
+  }
+  if(PF!=null && Math.abs(PF)>1.0001) out.push({lvl:'warn', t:'P.F. is above 1.'});
+  if(kVA!=null && kVA<0) out.push({lvl:'warn', t:'kVA should not be negative.'});
+  if(PF!=null && kVAr!=null && kVAr!==0 && Math.abs(PF)<0.995 && Math.sign(PF)!==Math.sign(kVAr))
+    out.push({lvl:'warn', t:'P.F. and kVAr have opposite signs. A minus sign may have been missed.'});
+  if(A!=null && kVA!=null && kVA>0){
+    const exp = kVA/(Math.sqrt(3)*kv);
+    if(Math.abs(A-exp) > Math.max(2, 0.15*exp))
+      out.push({lvl:'warn', t:`${kVA} kVA at ${kv} kV should be about ${Math.round(exp)} A, but current says ${A}. (Ignore this if the panel is not ${kv} kV.)`});
+  }
+  return out;
+}
+
+/* ---------------- rendering ---------------- */
+const app = $('#app');
+function render(){
+  renderBus();
+  if(S.view==='start') renderStart();
+  else if(S.view==='capture') renderCapture();
+  else if(S.view==='review') renderReview();
+  else if(S.view==='done') renderDone();
+}
+function renderBus(){
+  const bus = $('#bus'), lab = $('#roundLabel');
+  if(!S.round){ bus.innerHTML=''; lab.textContent='No round started'; return; }
+  const recs = roundRecords(), byIdx = {};
+  recs.forEach(r => byIdx[r.panelIdx] = r);
+  bus.innerHTML = S.panels.map((p,i) => {
+    let cls = 'tick';
+    const r = byIdx[i];
+    if(r) cls += ' ' + ({'OK':'ok','EDITED':'edited','CHECK':'check','NOT IN USE':'skip'}[r.status]||'ok');
+    else if(i===S.round.idx && S.view!=='done') cls += ' current';
+    return `<div class="${cls}" title="${esc(p.name)}"></div>`;
+  }).join('');
+  lab.textContent = `Round ${S.round.label} · ${recs.length} of ${S.panels.length} done`;
+}
+
+function renderStart(){
+  stopCam();
+  const resumable = S.round && S.round.idx < S.panels.length;
+  app.innerHTML = `
+  <div class="card">
+    <div class="big">Hourly round</div>
+    <p class="note" style="margin-top:0">Two photos per panel. The app reads the numbers, checks them against each other, and you confirm.</p>
+    <div class="field"><span>Reading time (goes in the Date-time column)</span>
+      <input class="txt" id="rl" value="${esc(hourLabel())}"></div>
+    <div class="actions">
+      ${resumable ? `<button class="btn primary" id="resume">Resume at ${esc(S.panels[S.round.idx].name)}</button>
+                     <button class="btn" id="newr">Start a new round</button>`
+                  : `<button class="btn primary" id="newr">Start round</button>`}
+    </div>
+    <p class="note">First load needs internet to fetch the text reader. After a round, export before clearing the browser data.</p>
+  </div>`;
+  const rl = $('#rl');
+  $('#newr').onclick = () => { if(resumable && !confirm('Leave the unfinished round and start a new one? Its saved readings stay in Records.')) return; startRound(rl.value.trim() || hourLabel()); };
+  if(resumable) $('#resume').onclick = startPanel;
+}
+
+async function renderCapture(){
+  const c = S.cur, panel = c.panel, B = BRANDS[panel.brand], shot = B.shots[c.shot];
+  const stepNo = c.shot==='cur' ? 1 : 2;
+  const canUndo = S.round.idx>0 && roundRecords().some(r => r.panelIdx===S.round.idx-1);
+  app.innerHTML = `
+  <div class="card">
+    <div class="pname">${esc(panel.name)}</div>
+    <div class="pmeta">${B.label} · panel ${c.idx+1} of ${S.panels.length}</div>
+    <div class="shot">Photo ${stepNo} of 2: ${esc(shot.title)}</div>
+    <p class="hint">${esc(shot.hint)} Keep the full screen inside the frame. It checks the screen title before accepting a photo; green means ready.</p>
+    <div id="camStatus" class="cam-status" role="status" aria-live="polite">Align the screen inside the frame</div>
+    <div id="camMsg"></div>
+    <div class="stage" id="stage"><div class="guide"></div></div>
+    <div class="zoom" id="zoomRow" hidden><span>Zoom</span><input type="range" id="zoom" aria-label="Zoom"></div>
+    <div class="actions">
+      <button class="btn primary" id="snap">Take photo</button>
+      <div class="two">
+        <label class="btn quiet">Gallery photo<input type="file" accept="image/*" id="file"></label>
+        <button class="btn quiet" id="skip">Not in use: skip</button>
+      </div>
+      ${canUndo ? '<button class="btn quiet" id="undo">Undo previous panel</button>' : ''}
+    </div>
+    <p class="note">Gallery photos work best when the LCD fills the image. Screen verification may ask you to confirm manually if the title is too small or unclear.</p>
+  </div>`;
+  $('#stage').insertBefore(video, $('.guide'));
+  $('#snap').onclick = () => { if(!stream || !video.videoWidth){ toast('Camera is not ready'); return; } validateCandidate(grabFromVideo(B.aspect),false,'camera'); };
+  $('#file').onchange = async e => {
+    const f = e.target.files[0]; if(!f) return;
+    try{ await validateCandidate(await fromFile(f),false,'gallery'); }catch(err){ toast('Could not open that image'); }
+    e.target.value='';
+  };
+  $('#skip').onclick = () => { if(confirm(`Mark ${panel.name} as not in use?`)) finishPanel('NOT IN USE', {}); };
+  if(canUndo) $('#undo').onclick = undoLast;
+  const ok = await startCam();
+  if(S.view!=='capture' || S.cur!==c) return;
+  if(!ok){ $('#camMsg').innerHTML = `<div class="camerr">${esc(camError)}</div>`; $('#stage').style.display='none'; return; }
+  layoutGuide();
+  startLiveGuide(c);
+  const track = stream.getVideoTracks()[0], caps = (track.getCapabilities && track.getCapabilities()) || {};
+  if(caps.zoom){
+    const z = $('#zoom'); z.min = caps.zoom.min; z.max = caps.zoom.max; z.step = caps.zoom.step || 0.1;
+    z.value = (track.getSettings().zoom) || caps.zoom.min; $('#zoomRow').hidden = false;
+    z.oninput = () => track.applyConstraints({advanced:[{zoom:parseFloat(z.value)}]}).catch(()=>{});
+  }
+}
+
+function fmtVal(v){ return v==null || isNaN(v) ? '' : String(v); }
+
+function renderReview(){
+  const c = S.cur, panel = c.panel, B = BRANDS[panel.brand];
+  const reading = Object.keys(c.pending).length > 0;
+  const rows = FIELDS.map(k => {
+    const m = META[k], low = c.conf[k]!=null && c.conf[k] < 60 && !c.touched[k];
+    const crop = c.crop[k] ? `<img class="crop" alt="${m.label} as photographed" src="${c.crop[k]}">` : `<div class="noimg">${reading ? 'Reading…' : 'No image'}</div>`;
+    return `<div class="row" data-k="${k}">
+      <div class="lab">${m.label}<small>${m.unit && m.label!==m.unit ? m.unit : ''}</small></div>
+      ${crop}
+      <div class="inwrap"><input inputmode="decimal" autocomplete="off" data-k="${k}" class="${low?'low':''}" value="${fmtVal(c.vals[k])}" aria-label="${m.label}">${m.signed ? `<button class="pm" data-k="${k}" aria-label="Flip sign of ${m.label}">±</button>` : ''}</div>
+    </div>`;
+  }).join('');
+  const overlays = ['cur','pwr'].filter(id => c.lcd[id]).map(id => `<img alt="${B.shots[id].title}" src="${c.lcd[id]}">`).join('');
+  app.innerHTML = `
+  <div class="card">
+    <div class="pname">${esc(panel.name)}</div>
+    <div class="pmeta">${B.label} · panel ${c.idx+1} of ${S.panels.length} · compare each box with the screen</div>
+    <div id="banner" style="margin-top:12px"></div>
+    <div>${rows}</div>
+    <div class="actions">
+      <button class="btn primary" id="confirm">Confirm</button>
+      <div class="two">
+        <button class="btn quiet" id="rt1">Retake ${esc(B.shots.cur.title.toLowerCase())}</button>
+        <button class="btn quiet" id="rt2">Retake power screen</button>
+      </div>
+      <button class="btn quiet" id="skip">Not in use: skip</button>
+    </div>
+    <details><summary>Show what the app looked at</summary>${overlays}<p class="note">Red boxes should sit on the numbers. If they are off, retake with the screen fitted in the frame.</p></details>
+  </div>`;
+  app.querySelectorAll('input[data-k]').forEach(inp => {
+    inp.oninput = () => {
+      const k = inp.dataset.k, t = inp.value.trim().replace(',','.');
+      c.touched[k] = true; inp.classList.remove('low');
+      c.vals[k] = (t==='' || t==='-' || t==='.' || isNaN(Number(t))) ? null : Number(t);
+      if(k==='kVAr' && panel.brand==='comap' && !c.touched.PF && c.vals.PF!=null){
+        c.vals.PF = (c.vals.kVAr!=null && c.vals.kVAr<0 ? -1 : 1) * Math.abs(c.vals.PF);
+        app.querySelector('input[data-k="PF"]').value = fmtVal(c.vals.PF);
+      }
+      updateBanner();
+    };
+  });
+  app.querySelectorAll('.pm').forEach(b => b.onclick = () => {
+    const k = b.dataset.k; if(c.vals[k]==null) return;
+    c.vals[k] = -c.vals[k]; c.touched[k] = true;
+    app.querySelector(`input[data-k="${k}"]`).value = fmtVal(c.vals[k]);
+    if(k==='kVAr' && panel.brand==='comap' && !c.touched.PF && c.vals.PF!=null){
+      c.vals.PF = (c.vals.kVAr<0 ? -1 : 1)*Math.abs(c.vals.PF); app.querySelector('input[data-k="PF"]').value = fmtVal(c.vals.PF);
+    }
+    updateBanner();
+  });
+  $('#rt1').onclick = () => { c.shot='cur'; c.retake='cur'; S.view='capture'; render(); };
+  $('#rt2').onclick = () => { c.shot='pwr'; c.retake='pwr'; S.view='capture'; render(); };
+  $('#skip').onclick = () => { if(confirm(`Mark ${panel.name} as not in use?`)) finishPanel('NOT IN USE', {}); };
+  $('#confirm').onclick = () => {
+    const checks = runChecks(c.vals, panel);
+    const edited = FIELDS.some(k => c.ocr[k]!==c.vals[k]);
+    const status = checks.some(x => x.lvl==='warn') ? 'CHECK' : edited ? 'EDITED' : 'OK';
+    finishPanel(status, c.vals);
+  };
+  updateBanner();
+}
+function updateBanner(){
+  const c = S.cur, reading = Object.keys(c.pending).length > 0;
+  const checks = runChecks(c.vals, c.panel);
+  const bad = checks.some(x => x.lvl==='bad'), warn = checks.some(x => x.lvl==='warn');
+  let cls, head;
+  if(reading && bad){ cls='warn'; head='Still reading the photos…'; }
+  else if(bad){ cls='bad'; head='Cannot confirm yet'; }
+  else if(warn){ cls='warn'; head='Check these numbers'; }
+  else { cls='ok'; head='Numbers agree with each other'; }
+  $('#banner').innerHTML = `<div class="banner ${cls}"><b>${head}</b>${checks.length ? '<ul>'+checks.map(x => `<li>${esc(x.t)}</li>`).join('')+'</ul>' : '<div class="note" style="color:inherit">kVA, kW, kVAr, P.F. and current are consistent. Still compare the boxes with the screen.</div>'}</div>`;
+  const btn = $('#confirm');
+  btn.disabled = bad;
+  btn.className = 'btn ' + (warn ? 'warn' : 'primary');
+  btn.textContent = warn ? 'Confirm anyway (flagged)' : 'Confirm and next panel';
+}
+
+function finishPanel(status, v){
+  const c = S.cur;
+  S.records.push({
+    id: Date.now()+'-'+c.idx, roundId:S.round.id, label:S.round.label, panelIdx:c.idx, panel:c.panel.name, brand:c.panel.brand,
+    A:v.A??null, kW:v.kW??null, kVAr:v.kVAr??null, kVA:v.kVA??null, PF:v.PF??null,
+    status, at:stamp(), by:S.settings.operator
+  });
+  S.round.idx = c.idx+1; persist(); startPanel();
+}
+function undoLast(){
+  const prev = S.round.idx-1;
+  const i = S.records.findIndex(r => r.roundId===S.round.id && r.panelIdx===prev);
+  if(i<0) return;
+  if(!confirm(`Remove the saved reading for ${S.records[i].panel} and redo it?`)) return;
+  S.records.splice(i,1); S.round.idx = prev; persist(); startPanel();
+}
+
+function renderDone(){
+  const recs = roundRecords(), n = s => recs.filter(r => r.status===s).length;
+  app.innerHTML = `
+  <div class="card">
+    <div class="big">Round complete</div>
+    <div class="pmeta">${esc(S.round.label)}</div>
+    <div class="stats">
+      <div><b>${n('OK')}</b><span>OK</span></div>
+      <div><b>${n('EDITED')}</b><span>Edited</span></div>
+      <div><b>${n('CHECK')}</b><span>Flagged</span></div>
+      <div><b>${n('NOT IN USE')}</b><span>Not in use</span></div>
+    </div>
+    <div class="actions">
+      <button class="btn primary" id="dl">Download CSV</button>
+      <button class="btn" id="cp">Copy rows to paste into Excel</button>
+      <button class="btn quiet" id="again">Start new round</button>
+    </div>
+    <p class="note">CSV columns: Date-time, Panel, kV (blank), A, PF, kW, kVA, kVAR, Status, Captured at, Entered by.</p>
+  </div>`;
+  $('#dl').onclick = () => downloadCsv(recs, S.round.label);
+  $('#cp').onclick = () => copyRows(recs);
+  $('#again').onclick = () => { S.view='start'; render(); };
+}
+
+/* ---------------- export ---------------- */
+const COLS = ['Date-time','Panel','kV','A','PF','kW','kVA','kVAR','Status','Captured at','Entered by'];
+const num = (v, d) => v==null ? '' : (d!=null ? Number(v).toFixed(d) : String(v));
+const rowOf = r => [r.label, r.panel, '', num(r.A), num(r.PF,2), num(r.kW), num(r.kVA), num(r.kVAr), r.status, r.at, r.by||''];
+const csvCell = v => /[",\n]/.test(v) ? '"'+String(v).replace(/"/g,'""')+'"' : String(v);
+function downloadCsv(recs, name){
+  if(!recs.length){ toast('Nothing to export'); return; }
+  const text = '\ufeff' + [COLS].concat(recs.map(rowOf)).map(r => r.map(csvCell).join(',')).join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], {type:'text/csv;charset=utf-8'}));
+  a.download = 'panel-readings_' + String(name||'all').replace(/[^0-9A-Za-z_-]+/g,'-') + '.csv';
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+async function copyRows(recs){
+  if(!recs.length){ toast('Nothing to copy'); return; }
+  const text = recs.map(rowOf).map(r => r.join('\t')).join('\n');
+  try{ await navigator.clipboard.writeText(text); toast('Copied. Paste into Excel.'); }
+  catch(e){ toast('Copy blocked: use Download CSV'); }
+}
+
+/* ---------------- dialogs ---------------- */
+$('#btnRecords').onclick = () => {
+  const all = S.records.slice().reverse(), cur = roundRecords();
+  $('#recordsBody').innerHTML = `
+    <h2>Records</h2>
+    <p class="note">${S.records.length} saved on this phone. Most recent first.</p>
+    <div class="actions">
+      <button class="btn primary" id="rDl">Download all CSV</button>
+      <div class="two"><button class="btn" id="rCurDl">This round CSV</button><button class="btn" id="rCp">Copy this round</button></div>
+      <button class="btn quiet" id="rClr">Delete all records</button>
+      <button class="btn quiet" id="rX">Close</button>
+    </div>
+    <div class="tbl"><table><thead><tr><th>Time</th><th>Panel</th><th>A</th><th>kW</th><th>kVAr</th><th>kVA</th><th>PF</th><th>Status</th></tr></thead><tbody>
+    ${all.slice(0,80).map(r => `<tr><td>${esc(r.at.slice(5,16))}</td><td>${esc(r.panel)}</td><td>${num(r.A)}</td><td>${num(r.kW)}</td><td>${num(r.kVAr)}</td><td>${num(r.kVA)}</td><td>${num(r.PF,2)}</td><td>${esc(r.status)}</td></tr>`).join('') || '<tr><td colspan="8">No readings yet.</td></tr>'}
+    </tbody></table></div>`;
+  $('#rDl').onclick = () => downloadCsv(S.records, 'all');
+  $('#rCurDl').onclick = () => downloadCsv(cur, S.round && S.round.label);
+  $('#rCp').onclick = () => copyRows(cur);
+  $('#rClr').onclick = () => { if(confirm('Delete every saved reading on this phone? Export first.') && confirm('Really delete all?')){ S.records=[]; persist(); render(); $('#dlgRecords').close(); } };
+  $('#rX').onclick = () => $('#dlgRecords').close();
+  $('#dlgRecords').showModal();
+};
+$('#btnSettings').onclick = () => {
+  $('#settingsBody').innerHTML = `
+    <h2>Settings</h2>
+    <div class="field"><span>Operator name (goes in Entered by)</span><input class="txt" id="sOp" value="${esc(S.settings.operator)}"></div>
+    <div class="two">
+      <div class="field"><span>kVA match tolerance (%)</span><input class="txt" id="sTol" inputmode="decimal" value="${S.settings.tol}"></div>
+      <div class="field"><span>Default panel kV</span><input class="txt" id="sKv" inputmode="decimal" value="${S.settings.kv}"></div>
+    </div>
+    <div class="field"><span>Panel order</span>
+      <textarea class="txt" id="sPanels" spellcheck="false">${esc(S.panelText)}</textarea>
+      <p class="note">One panel per line: NAME, comap or schneider, optional kV (for example <i>WATER TREATMENT PLANT, schneider, 11</i>). The kV is used only for the current check.</p></div>
+    <div class="actions">
+      <button class="btn primary" id="sSave">Save</button>
+      <button class="btn quiet" id="sReset">Reset panel list to default</button>
+      <button class="btn quiet" id="sX">Close</button>
+    </div>`;
+  $('#sSave').onclick = () => {
+    S.settings.operator = $('#sOp').value.trim();
+    const tol = parseFloat($('#sTol').value), kv = parseFloat($('#sKv').value);
+    S.settings.tol = isFinite(tol) && tol>0 ? tol : 3; S.settings.kv = isFinite(kv) && kv>0 ? kv : 33;
+    const nextPanelText = $('#sPanels').value.trim() || DEFAULT_PANELS;
+    const panelListChanged = nextPanelText !== S.panelText;
+    if(panelListChanged && S.round){
+      const unfinished = S.round.idx < S.panels.length;
+      if(unfinished && S.round.idx>0 && !confirm('Changing panel order during an unfinished round can misalign saved readings. Save these settings and abandon the unfinished round? Existing saved records will be kept.')) return;
+      S.round = null; S.cur = null; persist();
+    }
+    S.panelText = nextPanelText;
+    S.panels = parsePanels(S.panelText, S.settings.kv);
+    store.set(K.settings, S.settings); store.set(K.panels, S.panelText);
+    $('#dlgSettings').close(); toast('Saved');
+    if(S.view==='start' || !S.round) { S.view='start'; render(); }
+    else {
+      if(S.cur && S.round.idx < S.panels.length && !panelListChanged) S.cur.panel = S.panels[S.round.idx];
+      persist();
+      if(S.view==='review') renderReview();
+      else if(S.view==='done') renderDone();
+      else renderBus();
+    }
+  };
+  $('#sReset').onclick = () => { $('#sPanels').value = DEFAULT_PANELS; };
+  $('#sX').onclick = () => $('#dlgSettings').close();
+  $('#dlgSettings').showModal();
+};
+
+initEngine();
+render();
+window.addEventListener('pagehide',(event)=>{ stopCam(); if(!event.persisted && workerP) workerP.then(w=>{ if(w && w.terminate) w.terminate(); }).catch(()=>{}); });
+})();
+</script>
+</body>
+</html>
